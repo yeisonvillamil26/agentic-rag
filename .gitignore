@@ -1,0 +1,10 @@
+# Files
+.env
+graph.png
+
+
+# LangGraph
+__pycache__/
+.idea/
+.venv
+uv.lock
