@@ -5,6 +5,8 @@ load_dotenv()
 from langgraph.graph import StateGraph, END
 from graph.const import RETRIEVE, GRADE_DOCUMENTS, GENERATE, WEB_SEARCH
 from graph.nodes import retrieve, grade_documents, generate, web_search
+from graph.chains.answer_grader import answer_grader
+from graph.chains.hallucination_grader import hallucination_grader
 from graph.state import GraphState
 
 
@@ -16,6 +18,31 @@ def decide_to_generate(state):
     else:
         print("---GRADE: DOCUMENT RELEVANT---")
         return GENERATE
+
+
+def grade_generation_grounded_in_documents_and_question(state: GraphState) -> str:
+    print("--CHECK HALLUCINATIONS")
+    question = state["question"]
+    generation = state["generation"]
+    documents = state["documents"]
+
+    score = hallucination_grader.invoke(
+        {"documents": documents, "generation": generation}
+    )
+
+    if hallucination_grade := score.binary_score:
+        print("--DECISION: GENERATION IS GROUNDED IN DOCUMENTS")
+        print("--GRADE GENERATION Vs QUESTION--")
+        score = answer_grader.invoke({"question": question, "generation": generation})
+        if answer_grade := score.binary_score:
+            print("--DECISION: GENERATION ADDRESSES QUESTION--")
+            return "useful"
+        else:
+            print("--DECISION: GENERATION DOES NOT ADDRESS QUESTION--")
+            return "not useful"
+    else:
+        print("--DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS")
+        return "not supported"
 
 
 # Initialize workflow
@@ -40,6 +67,13 @@ workflow.add_conditional_edges(
     {WEB_SEARCH: WEB_SEARCH, GENERATE: GENERATE},
 )
 
+# Conditional grader
+workflow.add_conditional_edges(
+    GENERATE,
+    grade_generation_grounded_in_documents_and_question,
+    {"useful": END, "not useful": WEB_SEARCH, "not supported": GENERATE},
+)
+
 # Generation
 workflow.add_edge(WEB_SEARCH, GENERATE)
 # Workflow end
@@ -47,4 +81,4 @@ workflow.add_edge(GENERATE, END)
 
 # Compile
 app = workflow.compile()
-app.get_graph().draw_mermaid_png(output_file_path="graph.png")
+app.get_graph().draw_mermaid_png(output_file_path="graph_v2.png")

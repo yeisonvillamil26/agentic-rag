@@ -1,10 +1,12 @@
 # Files
 .env
 graph.png
+graph_v2.png
 
 
 # LangGraph
 __pycache__/
+*.pyc
 .idea/
 .venv
 uv.lock
